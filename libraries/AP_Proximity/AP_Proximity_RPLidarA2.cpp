@@ -30,7 +30,6 @@
 
 #if AP_PROXIMITY_RPLIDARA2_ENABLED
 
-#include "AP_Proximity_RPLidarA2.h"
 
 #include <AP_HAL/AP_HAL.h>
 #include "AP_Proximity_RPLidarA2.h"
@@ -130,7 +129,6 @@ float AP_Proximity_RPLidarA2::distance_min_m() const
     case Model::A2M12:
     case Model::C1:
     case Model::S1:
-        return 0.2f;
     case Model::S3:
         return 0.2f;
     }
