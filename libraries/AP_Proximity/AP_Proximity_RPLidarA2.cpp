@@ -350,6 +350,9 @@ void AP_Proximity_RPLidarA2::parse_response_device_info()
         model = Model::S1;
         device_type = "S1";
         break;
+    case 0x81;
+        model = Model::S3;
+        device_type = "S3";
     default:
         Debug(1, "Unknown device (%u)", _payload.device_info.model);
     }
