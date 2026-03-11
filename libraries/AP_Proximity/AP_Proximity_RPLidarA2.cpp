@@ -113,6 +113,8 @@ float AP_Proximity_RPLidarA2::distance_max_m() const
         return 12.0f;
     case Model::S1:
         return 40.0f;
+    case Model::S3:
+        return 40.0f;
     }
     return 0.0f;
 }
@@ -129,6 +131,7 @@ float AP_Proximity_RPLidarA2::distance_min_m() const
     case Model::C1:
     case Model::S1:
         return 0.2f;
+    case Model::S3:
     }
     return 0.0f;
 }
