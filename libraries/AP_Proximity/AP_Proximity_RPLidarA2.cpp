@@ -132,6 +132,7 @@ float AP_Proximity_RPLidarA2::distance_min_m() const
     case Model::S1:
         return 0.2f;
     case Model::S3:
+        return 0.2f;
     }
     return 0.0f;
 }
@@ -353,9 +354,10 @@ void AP_Proximity_RPLidarA2::parse_response_device_info()
         model = Model::S1;
         device_type = "S1";
         break;
-    case 0x81;
+    case 0x81:
         model = Model::S3;
         device_type = "S3";
+        break;
     default:
         Debug(1, "Unknown device (%u)", _payload.device_info.model);
     }
