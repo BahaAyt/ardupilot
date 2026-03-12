@@ -108,13 +108,15 @@ private:
     // remove bytes from read buffer:
     void consume_bytes(uint16_t count);
 
-    uint8_t _sync_error;
-    uint16_t _byte_count;
+    uint8_t _sync_error = 0;
+    uint16_t _byte_count = 0;
+    
+
 
     // request related variables
-    uint32_t  _last_distance_received_ms;     ///< system time of last distance measurement received from sensor
-    uint32_t  _last_reset_ms;
-
+    /// system time of last distance measurement received from sensor
+    uint32_t _last_distance_received_ms = 0;
+    uint32_t _last_reset_ms = 0;
                                     
    /* // face related variables
     AP_Proximity_Boundary_3D::Face _last_face;///< last face requested
