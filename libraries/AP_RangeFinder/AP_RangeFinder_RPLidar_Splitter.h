@@ -77,6 +77,12 @@ private:
     float min_distance_m;
     float angle_deg;
 };
+    void reset_virtual_sector(VirtualSectorReading &sector);
+    void reset_virtual_work_sectors();
+    bool angle_in_sector(float angle_deg, float start_deg, float end_deg) const;
+    void update_virtual_sector(VirtualSectorReading &sector, float angle_deg, float distance_m);
+    void update_virtual_rangefinder_buckets(float angle_deg, float distance_m);
+    void finalize_virtual_rangefinder_outputs();
 
     VirtualSectorReading _work_back {false, 0.0f, 0.0f};
     VirtualSectorReading _work_down {false, 0.0f, 0.0f};
@@ -109,11 +115,12 @@ private:
     uint32_t  _last_distance_received_ms;     ///< system time of last distance measurement received from sensor
     uint32_t  _last_reset_ms;
 
-    // face related variables
+                                    
+   /* // face related variables
     AP_Proximity_Boundary_3D::Face _last_face;///< last face requested
     float _last_angle_deg;                    ///< yaw angle (in degrees) of _last_distance_m
     float _last_distance_m;                   ///< shortest distance for _last_face
-    bool _last_distance_valid;                ///< true if _last_distance_m is valid
+    bool _last_distance_valid;*/                ///< true if _last_distance_m is valid
 
     struct PACKED _device_info {
         uint8_t model;
