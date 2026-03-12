@@ -44,11 +44,11 @@ reboot
 
 #include "AP_Proximity_config.h"
 
-#if AP_PROXIMITY_RPLIDARA2_ENABLED
+#if AP_PROXIMITY_RPLIDAR_Splitter_ENABLED
 
 #include "AP_Proximity_Backend_Serial.h"
 
-class AP_Proximity_RPLidarA2 : public AP_Proximity_Backend_Serial
+class AP_Proximity_RPLidar_Splitter : public AP_Proximity_Backend_Serial
 {
 
 public:
@@ -71,6 +71,20 @@ private:
         AWAITING_HEALTH,
         AWAITING_DEVICE_INFO,
     } _state = State::RESET;
+
+    struct VirtualSectorReading {
+    bool valid;
+    float min_distance_m;
+    float angle_deg;
+};
+
+    VirtualSectorReading _work_back {false, 0.0f, 0.0f};
+    VirtualSectorReading _work_down {false, 0.0f, 0.0f};
+    VirtualSectorReading _work_up   {false, 0.0f, 0.0f};
+
+    VirtualSectorReading _final_back {false, 0.0f, 0.0f};
+    VirtualSectorReading _final_down {false, 0.0f, 0.0f};
+    VirtualSectorReading _final_up   {false, 0.0f, 0.0f};
 
     // send request for something from sensor
     void send_request_for_health();
