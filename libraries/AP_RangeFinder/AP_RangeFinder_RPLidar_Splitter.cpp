@@ -26,7 +26,7 @@
  *
  */
 
-#include "AP_Proximity_config.h"
+#include "AP_RangeFinder_config.h"
 
 #if AP_RangeFinder_RPLIDAR_SPLITTER_ENABLED
 
@@ -87,13 +87,13 @@ void AP_RangeFinder_RPLidar_Splitter::update(void)
 
     // check for timeout and set health status
     if (AP_HAL::millis() - _last_distance_received_ms > COMM_ACTIVITY_TIMEOUT_MS) {
-        set_status(AP_Proximity::Status::NoData);
+        set_status(AP_Rangefinder::Status::NoData);
         Debug(1, "LIDAR NO DATA");
         if (AP_HAL::millis() - _last_reset_ms > 10000) {
             reset_rplidar();
         }
     } else {
-        set_status(AP_Proximity::Status::Good);
+        set_status(AP_Rangefinder::Status::Good);
     }
 }
 
