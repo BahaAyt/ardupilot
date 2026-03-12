@@ -28,11 +28,11 @@
 
 #include "AP_Proximity_config.h"
 
-#if AP_PROXIMITY_RPLIDARA2_ENABLED
+#if AP_PROXIMITY_RPLIDAR_Splitter_ENABLED
 
 
 #include <AP_HAL/AP_HAL.h>
-#include "AP_Proximity_RPLidarA2.h"
+#include "AP_Proximity_RPLidar_Splitter.h"
 #include <AP_InternalError/AP_InternalError.h>
 
 #include <ctype.h>
@@ -68,7 +68,7 @@
 
 extern const AP_HAL::HAL& hal;
 
-void AP_Proximity_RPLidarA2::update(void)
+void AP_Proximity_RPLidar_Splitter::update(void)
 {
     if (_uart == nullptr) {
         return;
@@ -98,7 +98,7 @@ void AP_Proximity_RPLidarA2::update(void)
 }
 
 // get maximum distance (in meters) of sensor
-float AP_Proximity_RPLidarA2::distance_max_m() const
+float AP_Proximity_RPLidar_Splitter::distance_max_m() const
 {
     switch (model) {
     case Model::UNKNOWN:
@@ -119,7 +119,7 @@ float AP_Proximity_RPLidarA2::distance_max_m() const
 }
 
 // get minimum distance (in meters) of sensor
-float AP_Proximity_RPLidarA2::distance_min_m() const
+float AP_Proximity_RPLidar_Splitter::distance_min_m() const
 {
     switch (model) {
     case Model::UNKNOWN:
@@ -135,7 +135,7 @@ float AP_Proximity_RPLidarA2::distance_min_m() const
     return 0.0f;
 }
 
-void AP_Proximity_RPLidarA2::reset_rplidar()
+void AP_Proximity_RPLidar_Splitter::reset_rplidar()
 {
     static const uint8_t tx_buffer[2] {RPLIDAR_PREAMBLE, RPLIDAR_CMD_RESET};
     _uart->write(tx_buffer, 2);
@@ -146,7 +146,7 @@ void AP_Proximity_RPLidarA2::reset_rplidar()
 }
 
 // set Lidar into SCAN mode
-void AP_Proximity_RPLidarA2::send_scan_mode_request()
+void AP_Proximity_RPLidar_Splitter::send_scan_mode_request()
 {
     static const uint8_t tx_buffer[2] {RPLIDAR_PREAMBLE, RPLIDAR_CMD_SCAN};
     _uart->write(tx_buffer, 2);
@@ -154,7 +154,7 @@ void AP_Proximity_RPLidarA2::send_scan_mode_request()
 }
 
 // send request for sensor health
-void AP_Proximity_RPLidarA2::send_request_for_health()                                    //not called yet
+void AP_Proximity_RPLidar_Splitter::send_request_for_health()                                    //not called yet
 {
     static const uint8_t tx_buffer[2] {RPLIDAR_PREAMBLE, RPLIDAR_CMD_GET_DEVICE_HEALTH};
     _uart->write(tx_buffer, 2);
@@ -162,14 +162,14 @@ void AP_Proximity_RPLidarA2::send_request_for_health()                          
 }
 
 // send request for device information
-void AP_Proximity_RPLidarA2::send_request_for_device_info()
+void AP_Proximity_RPLidar_Splitter::send_request_for_device_info()
 {
     static const uint8_t tx_buffer[2] {RPLIDAR_PREAMBLE, RPLIDAR_CMD_GET_DEVICE_INFO};
     _uart->write(tx_buffer, 2);
     Debug(1, "Sent device information request");
 }
 
-void AP_Proximity_RPLidarA2::consume_bytes(uint16_t count)
+void AP_Proximity_RPLidar_Splitter::consume_bytes(uint16_t count)
 {
     if (count > _byte_count) {
         INTERNAL_ERROR(AP_InternalError::error_t::flow_of_control);
@@ -182,13 +182,13 @@ void AP_Proximity_RPLidarA2::consume_bytes(uint16_t count)
     }
 }
 
-void AP_Proximity_RPLidarA2::reset()
+void AP_Proximity_RPLidar_Splitter::reset()
 {
     _state = State::RESET;
     _byte_count = 0;
 }
 
-bool AP_Proximity_RPLidarA2::make_first_byte_in_payload(uint8_t desired_byte)
+bool AP_Proximity_RPLidar_Splitter::make_first_byte_in_payload(uint8_t desired_byte)
 {
     if (_byte_count == 0) {
         return false;
@@ -207,7 +207,91 @@ bool AP_Proximity_RPLidarA2::make_first_byte_in_payload(uint8_t desired_byte)
     return false;
 }
 
-void AP_Proximity_RPLidarA2::get_readings()
+void AP_Proximity_RPLidar_Splitter::reset_virtual_sector(VirtualSectorReading &sector)
+{
+    sector.valid = false;
+    sector.min_distance_m = 0.0f;
+    sector.angle_deg = 0.0f;
+}
+
+void AP_Proximity_RPLidar_Splitter::reset_virtual_work_sectors()
+{
+    reset_virtual_sector(_work_back);
+    reset_virtual_sector(_work_down);
+    reset_virtual_sector(_work_up);
+}
+
+bool AP_Proximity_RPLidar_Splitter::angle_in_sector(float angle_deg, float start_deg, float end_deg) const
+{
+    angle_deg = wrap_360(angle_deg);
+    start_deg = wrap_360(start_deg);
+    end_deg = wrap_360(end_deg);
+
+    if (start_deg <= end_deg) {
+        return angle_deg >= start_deg && angle_deg <= end_deg;
+    }
+
+    // wrapped sector, e.g. 330 -> 30
+    return angle_deg >= start_deg || angle_deg <= end_deg;
+}
+
+void AP_Proximity_RPLidar_Splitter::update_virtual_sector(VirtualSectorReading &sector,
+                                                   float angle_deg,
+                                                   float distance_m)
+{
+    if (!sector.valid || distance_m < sector.min_distance_m) {
+        sector.valid = true;
+        sector.min_distance_m = distance_m;
+        sector.angle_deg = angle_deg;
+    }
+}
+
+void AP_Proximity_RPLidar_Splitter::update_virtual_rangefinder_buckets(float angle_deg, float distance_m)
+{
+    // Example sectors:
+    // back  = 330° to  30°
+    // down  =  60° to 120°
+    // up    = 240° to 300°
+
+    if (angle_in_sector(angle_deg, 330.0f, 30.0f)) {
+        update_virtual_sector(_work_back, angle_deg, distance_m);
+    } else if (angle_in_sector(angle_deg, 60.0f, 120.0f)) {
+        update_virtual_sector(_work_down, angle_deg, distance_m);
+    } else if (angle_in_sector(angle_deg, 240.0f, 300.0f)) {
+        update_virtual_sector(_work_up, angle_deg, distance_m);
+    }
+}
+
+void AP_Proximity_RPLidarA2::finalize_virtual_rangefinder_outputs()
+{
+    _final_back = _work_back;
+    _final_down = _work_down;
+    _final_up   = _work_up;
+
+#if RP_DEBUG_LEVEL >= 1
+    if (_final_back.valid) {
+        Debug(1, "VF BACK  D=%0.2f A=%0.1f", _final_back.min_distance_m, _final_back.angle_deg);
+    } else {
+        Debug(1, "VF BACK  invalid");
+    }
+
+    if (_final_down.valid) {
+        Debug(1, "VF DOWN  D=%0.2f A=%0.1f", _final_down.min_distance_m, _final_down.angle_deg);
+    } else {
+        Debug(1, "VF DOWN  invalid");
+    }
+
+    if (_final_up.valid) {
+        Debug(1, "VF UP    D=%0.2f A=%0.1f", _final_up.min_distance_m, _final_up.angle_deg);
+    } else {
+        Debug(1, "VF UP    invalid");
+    }
+#endif
+
+    reset_virtual_work_sectors();
+}
+
+void AP_Proximity_RPLidar_Splitter::get_readings()
 {
     Debug(2, "             CURRENT STATE: %u ", (unsigned)_state);
     const uint32_t nbytes = _uart->available();
@@ -327,7 +411,7 @@ void AP_Proximity_RPLidarA2::get_readings()
     }
 }
 
-void AP_Proximity_RPLidarA2::parse_response_device_info()
+void AP_Proximity_RPLidar_Splitter::parse_response_device_info()
 {
     Debug(1, "Received DEVICE_INFO");
     const char *device_type = "UNKNOWN";
@@ -368,7 +452,7 @@ void AP_Proximity_RPLidarA2::parse_response_device_info()
     _state = State::AWAITING_RESPONSE;
 }
 
-void AP_Proximity_RPLidarA2::parse_response_data()
+void AP_Proximity_RPLidar_Splitter::parse_response_data()
 {
     if (_sync_error) {
         // out of 5-byte sync mask -> catch new revolution
@@ -397,6 +481,38 @@ void AP_Proximity_RPLidarA2::parse_response_data()
     Debug(2, "   D%02.2f A%03.1f Q%0.2f", distance_m, angle_deg, quality);
 #endif
     _last_distance_received_ms = AP_HAL::millis();
+
+    // ------------------------------------------------------------------
+    // RANGEFINDER-LIKE REDUCTION STEP
+    // ------------------------------------------------------------------
+    // If this sample is marked as the start of a new revolution,
+    // finalize the previous revolution’s sector minima.
+    //
+    // Note:
+    // Depending on startup behavior, the very first finalize may produce
+    // invalid outputs until one full revolution has been collected.
+    if (_payload.sensor_scan.startbit) {
+        finalize_virtual_rangefinder_outputs();
+    }
+
+    // Ignore readings that the native backend considers invalid/useless
+    if (ignore_reading(angle_deg, distance_m)) {
+        return;
+    }
+
+    // Also reject too-small distances
+    if (distance_m <= distance_min_m()) {
+        return;
+    }
+
+    // Sort this sample into back/down/up sectors and keep the nearest one
+    update_virtual_rangefinder_buckets(angle_deg, distance_m);
+
+    // ------------------------------------------------------------------
+
+    
+/* OLDER PROXXIMITY FACE LOGIC 
+
     if (!ignore_reading(angle_deg, distance_m)) {
         const AP_Proximity_Boundary_3D::Face face = frontend.boundary.get_face(angle_deg);
 
@@ -423,10 +539,10 @@ void AP_Proximity_RPLidarA2::parse_response_data()
             // update OA database
             database_push(_last_angle_deg, _last_distance_m);
         }
-    }
+    }*/
 }
 
-void AP_Proximity_RPLidarA2::parse_response_health()
+void AP_Proximity_RPLidar_Splitter::parse_response_health()
 {
     // health issue if status is "3" ->HW error
     if (_payload.sensor_health.status == 3) {
