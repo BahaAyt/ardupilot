@@ -44,11 +44,11 @@ reboot
 
 #include "AP_Proximity_config.h"
 
-#if AP_PROXIMITY_RPLIDARA2_ENABLED
+#if AP_PROXIMITY_RPLIDARVERTICAL_ENABLED
 
 #include "AP_Proximity_Backend_Serial.h"
 
-class AP_Proximity_RPLidarA2 : public AP_Proximity_Backend_Serial
+class AP_Proximity_RPLidarVertical : public AP_Proximity_Backend_Serial
 {
 
 public:
@@ -160,4 +160,4 @@ private:
     bool make_first_byte_in_payload(uint8_t desired_byte);
 };
 
-#endif // AP_PROXIMITY_RPLIDARA2_ENABLED
+#endif // AP_PROXIMITY_RPLIDARVERTICAL_ENABLED
