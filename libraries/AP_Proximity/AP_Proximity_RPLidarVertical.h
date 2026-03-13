@@ -85,6 +85,27 @@ private:
     void reset_rplidar();
     void reset();
 
+    struct VirtualSectorReading {
+    bool valid;
+    float min_distance_m;
+    float angle_deg;
+    };
+
+    void reset_virtual_sector(VirtualSectorReading &sector);
+    void reset_virtual_work_sectors();
+    bool angle_in_sector(float angle_deg, float start_deg, float end_deg) const;
+    void update_virtual_sector(VirtualSectorReading &sector, float angle_deg, float distance_m);
+    void update_virtual_rangefinder_buckets(float angle_deg, float distance_m);
+    void finalize_virtual_rangefinder_outputs();
+
+    VirtualSectorReading _work_back {false, 0.0f, 0.0f};
+    VirtualSectorReading _work_down {false, 0.0f, 0.0f};
+    VirtualSectorReading _work_up   {false, 0.0f, 0.0f};
+
+    VirtualSectorReading _final_back {false, 0.0f, 0.0f};
+    VirtualSectorReading _final_down {false, 0.0f, 0.0f};
+    VirtualSectorReading _final_up   {false, 0.0f, 0.0f};
+
     // remove bytes from read buffer:
     void consume_bytes(uint16_t count);
 
