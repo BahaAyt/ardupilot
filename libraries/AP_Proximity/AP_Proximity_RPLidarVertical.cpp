@@ -30,7 +30,6 @@
 
 #if AP_PROXIMITY_RPLIDARA2_ENABLED
 
-#include "AP_Proximity_RPLidarA2.h"
 
 #include <AP_HAL/AP_HAL.h>
 #include "AP_Proximity_RPLidarA2.h"
@@ -99,7 +98,7 @@ void AP_Proximity_RPLidarA2::update(void)
 }
 
 // get maximum distance (in meters) of sensor
-float AP_Proximity_RPLidarA2::distance_max() const
+float AP_Proximity_RPLidarA2::distance_max_m() const
 {
     switch (model) {
     case Model::UNKNOWN:
@@ -108,24 +107,29 @@ float AP_Proximity_RPLidarA2::distance_max() const
         return 8.0f;
     case Model::A2:
         return 16.0f;
+    case Model::A2M12:
     case Model::C1:
         return 12.0f;
     case Model::S1:
+        return 40.0f;
+    case Model::S3:
         return 40.0f;
     }
     return 0.0f;
 }
 
 // get minimum distance (in meters) of sensor
-float AP_Proximity_RPLidarA2::distance_min() const
+float AP_Proximity_RPLidarA2::distance_min_m() const
 {
     switch (model) {
     case Model::UNKNOWN:
         return 0.0f;
     case Model::A1:
     case Model::A2:
+    case Model::A2M12:
     case Model::C1:
     case Model::S1:
+    case Model::S3:
         return 0.2f;
     }
     return 0.0f;
@@ -336,6 +340,10 @@ void AP_Proximity_RPLidarA2::parse_response_device_info()
         model = Model::A2;
         device_type = "A2";
         break;
+    case 0x2C:
+        model = Model::A2M12;
+        device_type = "A2M12";
+        break;
     case 0x41:
         model=Model::C1;
         device_type="C1";
@@ -344,9 +352,17 @@ void AP_Proximity_RPLidarA2::parse_response_device_info()
         model = Model::S1;
         device_type = "S1";
         break;
+    case 0x81:
+        model = Model::S3;
+        device_type = "S3";
+        break;
     default:
         Debug(1, "Unknown device (%u)", _payload.device_info.model);
     }
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO,
+              "RPLidar raw model=%u (0x%02X)",
+              _payload.device_info.model,
+              _payload.device_info.model);
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "RPLidar %s hw=%u fw=%u.%u", device_type, _payload.device_info.hardware, _payload.device_info.firmware_minor, _payload.device_info.firmware_major);
     send_scan_mode_request();
     _state = State::AWAITING_RESPONSE;
@@ -397,7 +413,7 @@ void AP_Proximity_RPLidarA2::parse_response_data()
             _last_face = face;
             _last_distance_valid = false;
         }
-        if (distance_m > distance_min()) {
+        if (distance_m > distance_min_m()) {
             // update shortest distance
             if (!_last_distance_valid || (distance_m < _last_distance_m)) {
                 _last_distance_m = distance_m;
