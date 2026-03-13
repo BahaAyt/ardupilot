@@ -35,12 +35,14 @@
 #include "AP_Proximity_RPLidarVertical.h"
 #include <AP_InternalError/AP_InternalError.h>
 
+
 #include <ctype.h>
 #include <stdio.h>
 
 #define RP_DEBUG_LEVEL 0
 
 #include <GCS_MAVLink/GCS.h>
+#include <mavlink/v2.0/common/mavlink.h>
 #if RP_DEBUG_LEVEL
   #define Debug(level, fmt, args ...)  do { if (level <= RP_DEBUG_LEVEL) { GCS_SEND_TEXT(MAV_SEVERITY_INFO, fmt, ## args); } } while (0)
 #else
@@ -65,6 +67,15 @@
 
 // Commands with payload and have response
 #define RPLIDAR_CMD_EXPRESS_SCAN       0x82
+
+//Defining orientation for split
+#define RPLIDAR_VERTICAL_ID_BACK   50
+#define RPLIDAR_VERTICAL_ID_UP     51
+#define RPLIDAR_VERTICAL_ID_DOWN   52
+
+// back  = yaw 180
+// up    = pitch 90
+// down  = pitch 270
 
 extern const AP_HAL::HAL& hal;
 
@@ -368,6 +379,107 @@ void AP_Proximity_RPLidarVertical::parse_response_device_info()
     _state = State::AWAITING_RESPONSE;
 }
 
+void AP_Promximty_RPLidarVertical::send_distance_sensor_message(
+    uint8_t sensor_id,
+    uint8_t orientation,
+    float distance_m)
+{
+    // Ignore invalid values
+    if (distance_m <= 0.0f) {
+        return;
+    }
+
+    const uint16_t min_distance_cm = (uint16_t)(distance_min_m() * 100.0f);
+    const uint16_t max_distance_cm = (uint16_t)(distance_max_m() * 100.0f);
+    uint16_t current_distance_cm = (uint16_t)(distance_m * 100.0f);
+
+    if (current_distance_cm < min_distance_cm) {
+        current_distance_cm = min_distance_cm;
+    }
+    if (current_distance_cm > max_distance_cm) {
+        current_distance_cm = max_distance_cm;
+    }
+
+    mavlink_message_t msg;
+
+    // covariance = 0 for now
+    // type = MAV_DISTANCE_SENSOR_LASER
+    mavlink_msg_distance_sensor_pack(
+        mavlink_system.sysid,
+        mavlink_system.compid,
+        &msg,
+        AP_HAL::millis(),
+        min_distance_cm,
+        max_distance_cm,
+        current_distance_cm,
+        MAV_DISTANCE_SENSOR_LASER,
+        sensor_id,
+        orientation,
+        0);
+
+    // Send to all active GCS links
+    for (uint8_t i = 0; i < MAVLINK_COMM_NUM_BUFFERS; i++) {
+        GCS_MAVLINK *link = gcs().chan(i);
+        if (link == nullptr) {
+            continue;
+        }
+        link->send_message(msg);
+    }
+}
+
+void AP_Proximity_RPLidarVertical::finalize_virtual_rangefinder_outputs()
+{
+    _final_back = _work_back;
+    _final_down = _work_down;
+    _final_up   = _work_up;
+
+#if RP_DEBUG_LEVEL >= 1
+    if (_final_back.valid) {
+        Debug(1, "VF BACK  D=%0.2f A=%0.1f", _final_back.min_distance_m, _final_back.angle_deg);
+    } else {
+        Debug(1, "VF BACK  invalid");
+    }
+
+    if (_final_down.valid) {
+        Debug(1, "VF DOWN  D=%0.2f A=%0.1f", _final_down.min_distance_m, _final_down.angle_deg);
+    } else {
+        Debug(1, "VF DOWN  invalid");
+    }
+
+    if (_final_up.valid) {
+        Debug(1, "VF UP    D=%0.2f A=%0.1f", _final_up.min_distance_m, _final_up.angle_deg);
+    } else {
+        Debug(1, "VF UP    invalid");
+    }
+#endif
+
+    // Send MAVLink DISTANCE_SENSOR messages
+    if (_final_back.valid) {
+        send_distance_sensor_message(
+            RPLIDAR_VERTICAL_ID_BACK,
+            MAV_SENSOR_ROTATION_YAW_180,
+            _final_back.min_distance_m);
+    }
+
+    if (_final_down.valid) {
+        send_distance_sensor_message(
+            RPLIDAR_VERTICAL_ID_DOWN,
+            MAV_SENSOR_ROTATION_PITCH_270,
+            _final_down.min_distance_m);
+    }
+
+    if (_final_up.valid) {
+        send_distance_sensor_message(
+            RPLIDAR_VERTICAL_ID_UP,
+            MAV_SENSOR_ROTATION_PITCH_90,
+            _final_up.min_distance_m);
+    }
+
+    reset_virtual_work_sectors();
+}
+
+
+
 void AP_Proximity_RPLidarVertical::parse_response_data()
 {
     if (_sync_error) {
@@ -397,33 +509,20 @@ void AP_Proximity_RPLidarVertical::parse_response_data()
     Debug(2, "   D%02.2f A%03.1f Q%0.2f", distance_m, angle_deg, quality);
 #endif
     _last_distance_received_ms = AP_HAL::millis();
-    if (!ignore_reading(angle_deg, distance_m)) {
-        const AP_Proximity_Boundary_3D::Face face = frontend.boundary.get_face(angle_deg);
-
-        if (face != _last_face) {
-            // distance is for a new face, the previous one can be updated now
-            if (_last_distance_valid) {
-                frontend.boundary.set_face_attributes(_last_face, _last_angle_deg, _last_distance_m, state.instance);
-            } else {
-                // reset distance from last face
-                frontend.boundary.reset_face(face, state.instance);
-            }
-
-            // initialize the new face
-            _last_face = face;
-            _last_distance_valid = false;
-        }
-        if (distance_m > distance_min_m()) {
-            // update shortest distance
-            if (!_last_distance_valid || (distance_m < _last_distance_m)) {
-                _last_distance_m = distance_m;
-                _last_distance_valid = true;
-                _last_angle_deg = angle_deg;
-            }
-            // update OA database
-            database_push(_last_angle_deg, _last_distance_m);
-        }
+    // A new revolution starts here: finalize and transmit the previous one
+    if (_payload.sensor_scan.startbit) {
+        finalize_virtual_rangefinder_outputs();
     }
+
+    if (ignore_reading(angle_deg, distance_m)) {
+        return;
+    }
+
+    if (distance_m <= distance_min_m()) {
+        return;
+    }
+
+    update_virtual_rangefinder_buckets(angle_deg, distance_m);
 }
 
 void AP_Proximity_RPLidarVertical::parse_response_health()
