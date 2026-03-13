@@ -379,6 +379,61 @@ void AP_Proximity_RPLidarVertical::parse_response_device_info()
     _state = State::AWAITING_RESPONSE;
 }
 
+void AP_Proximity_RPLidarVertical::reset_virtual_sector(VirtualSectorReading &sector)
+{
+    sector.valid = false;
+    sector.min_distance_m = 0.0f;
+    sector.angle_deg = 0.0f;
+}
+
+void AP_Proximity_RPLidarVertical::reset_virtual_work_sectors()
+{
+    reset_virtual_sector(_work_back);
+    reset_virtual_sector(_work_down);
+    reset_virtual_sector(_work_up);
+}
+
+bool AP_Proximity_RPLidarVertical::angle_in_sector(float angle_deg, float start_deg, float end_deg) const
+{
+    angle_deg = wrap_360(angle_deg);
+    start_deg = wrap_360(start_deg);
+    end_deg = wrap_360(end_deg);
+
+    if (start_deg <= end_deg) {
+        return angle_deg >= start_deg && angle_deg <= end_deg;
+    }
+
+    // wrapped sector, e.g. 330 -> 30
+    return angle_deg >= start_deg || angle_deg <= end_deg;
+}
+
+void AP_Proximity_RPLidarVertical::update_virtual_sector(VirtualSectorReading &sector,
+                                                   float angle_deg,
+                                                   float distance_m)
+{
+    if (!sector.valid || distance_m < sector.min_distance_m) {
+        sector.valid = true;
+        sector.min_distance_m = distance_m;
+        sector.angle_deg = angle_deg;
+    }
+}
+
+void AP_Proximity_RPLidarVertical::update_virtual_rangefinder_buckets(float angle_deg, float distance_m)
+{
+    // Example sectors:
+    // back  = 330° to  30°
+    // down  =  60° to 120°
+    // up    = 240° to 300°
+
+    if (angle_in_sector(angle_deg, 330.0f, 30.0f)) {
+        update_virtual_sector(_work_back, angle_deg, distance_m);
+    } else if (angle_in_sector(angle_deg, 60.0f, 120.0f)) {
+        update_virtual_sector(_work_down, angle_deg, distance_m);
+    } else if (angle_in_sector(angle_deg, 240.0f, 300.0f)) {
+        update_virtual_sector(_work_up, angle_deg, distance_m);
+    }
+}
+
 void AP_Proximity_RPLidarVertical::send_distance_sensor_message(
     uint8_t sensor_id,
     uint8_t orientation,
