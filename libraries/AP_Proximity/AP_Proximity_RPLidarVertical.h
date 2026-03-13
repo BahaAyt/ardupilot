@@ -101,6 +101,9 @@ private:
     float _last_distance_m;                   ///< shortest distance for _last_face
     bool _last_distance_valid;                ///< true if _last_distance_m is valid
 
+    // sending mavlink message containing the distance 
+    void send_distance_sensor_message(uint8_t sensor_id, uint8_t orientation, float distance_m);
+
     struct PACKED _device_info {
         uint8_t model;
         uint8_t firmware_minor;
