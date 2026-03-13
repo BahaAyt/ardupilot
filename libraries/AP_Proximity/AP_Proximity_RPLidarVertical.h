@@ -109,18 +109,14 @@ private:
     // remove bytes from read buffer:
     void consume_bytes(uint16_t count);
 
-    uint8_t _sync_error;
-    uint16_t _byte_count;
+
+    uint8_t _sync_error = 0;
+    uint16_t _byte_count = 0;
+    
 
     // request related variables
-    uint32_t  _last_distance_received_ms;     ///< system time of last distance measurement received from sensor
-    uint32_t  _last_reset_ms;
-
-    // face related variables
-    AP_Proximity_Boundary_3D::Face _last_face;///< last face requested
-    float _last_angle_deg;                    ///< yaw angle (in degrees) of _last_distance_m
-    float _last_distance_m;                   ///< shortest distance for _last_face
-    bool _last_distance_valid;                ///< true if _last_distance_m is valid
+    uint32_t _last_distance_received_ms = 0;     ///< system time of last distance measurement received from sensor
+    uint32_t _last_reset_ms = 0;
 
     // sending mavlink message containing the distance 
     void send_distance_sensor_message(uint8_t sensor_id, uint8_t orientation, float distance_m);
