@@ -379,7 +379,7 @@ void AP_Proximity_RPLidarVertical::parse_response_device_info()
     _state = State::AWAITING_RESPONSE;
 }
 
-void AP_Promximty_RPLidarVertical::send_distance_sensor_message(
+void AP_Proximity_RPLidarVertical::send_distance_sensor_message(
     uint8_t sensor_id,
     uint8_t orientation,
     float distance_m)
