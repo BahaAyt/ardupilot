@@ -381,7 +381,10 @@ public:
     void send_home_position() const;
     void send_gps_global_origin() const;
     virtual void send_attitude_target() {};
-    virtual void send_position_target_global_int() { };
+    void send_position_target_global_int();
+    // returns a Location to which the vehicle is currently heading,
+    // or would head to in an autonomous mode
+    virtual bool get_target_location(Location &loc) const { return false; }
     virtual void send_position_target_local_ned() { };
     void send_servo_output_raw();
     void send_accelcal_vehicle_position(uint32_t position);
@@ -742,6 +745,10 @@ protected:
     // vehicle-overridable message send function
     virtual bool try_send_message(enum ap_message id);
     virtual void send_global_position_int();
+
+#if AP_MAVLINK_UTM_GLOBAL_POSITION_SENDING_ENABLED
+    void send_utm_global_position() const;
+#endif  // AP_MAVLINK_UTM_GLOBAL_POSITION_SENDING_ENABLED
 
     // message sending functions:
     bool try_send_mission_message(enum ap_message id);

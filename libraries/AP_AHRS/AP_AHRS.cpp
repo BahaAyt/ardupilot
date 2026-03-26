@@ -1549,8 +1549,11 @@ void AP_AHRS::use_recorded_origin_maybe()
         return;
     }
 
-    // only set if not using GPS
-    if (using_gps()) {
+    // don't use recorded origin if the configured EKF uses GPS for
+    // position — GPS will set a correct origin when it gets
+    // a fix. Using the recorded origin here would prevent GPS from
+    // setting it later (EKF origin is immutable once set).
+    if (using_gps_for_pos()) {
         return;
     }
 
@@ -3268,6 +3271,19 @@ bool AP_AHRS::get_variances(float &velVar, float &posVar, float &hgtVar, Vector3
     return false;
 }
 
+// get 1-sigma position and velocity uncertainty from the EKF state error covariance matrix P
+bool AP_AHRS::get_pos_vel_uncertainty(float &pos_horiz_m, float &pos_vert_m, float &vel_m_s) const
+{
+    switch (active_EKF_type()) {
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return EKF3.getPosVelUncertainty(pos_horiz_m, pos_vert_m, vel_m_s);
+#endif
+    default:
+        return false;
+    }
+}
+
 // get a source's velocity innovations.  source should be from 0 to 7 (see AP_NavEKF_Source::SourceXY)
 // returns true on success and results are placed in innovations and variances arguments
 bool AP_AHRS::get_vel_innovations_and_variances_for_source(uint8_t source, Vector3f &innovations, Vector3f &variances) const
@@ -3598,6 +3614,34 @@ bool AP_AHRS::using_gps(void) const
         return true;
     }
     // since there is no default case above, this is unreachable
+    return true;
+}
+
+// check if GPS is configured as the position source for
+// the configured EKF type
+bool AP_AHRS::using_gps_for_pos(void) const
+{
+    switch (active_EKF_type()) {
+#if HAL_NAVEKF2_AVAILABLE
+    case EKFType::TWO:
+        return EKF2.configuredToUseGPSForPosXY();
+#endif
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return EKF3.configuredToUseGPSForPos();
+#endif
+#if AP_AHRS_DCM_ENABLED
+    case EKFType::DCM:
+        return _gps_use != GPSUse::Disable;
+#endif
+#if AP_AHRS_SIM_ENABLED
+    case EKFType::SIM:
+#endif
+#if AP_AHRS_EXTERNAL_ENABLED
+    case EKFType::EXTERNAL:
+#endif
+        return true;
+    }
     return true;
 }
 

@@ -7,8 +7,8 @@ Andrew Tridgell, October 2011
  AP_FLAKE8_CLEAN
 """
 import atexit
-import fnmatch
 import copy
+import fnmatch
 import glob
 import optparse
 import os
@@ -20,21 +20,21 @@ import sys
 import time
 import traceback
 
-import blimp
-import rover
+from pymavlink.generator import mavtemplate
+
+import antennatracker
 import arducopter
 import arduplane
 import ardusub
-import antennatracker
-import quadplane
 import balancebot
-import sailboat
-import helicopter
-
+import blimp
 import examples
-from pysim import util
-from pymavlink.generator import mavtemplate
+import helicopter
+import quadplane
+import rover
+import sailboat
 
+from pysim import util
 from vehicle_test_suite import Test
 
 tester = None
@@ -99,7 +99,7 @@ def build_examples(**kwargs):
         print("Running build.examples for %s" % target)
         try:
             util.build_examples(target, **kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print("Failed build_examples on board=%s" % target)
             print(str(e))
             return False
@@ -113,7 +113,7 @@ def build_unit_tests(**kwargs):
         print("Running build.unit_tests for %s" % target)
         try:
             util.build_tests(target, **kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print("Failed build.unit_tests on board=%s" % target)
             print(str(e))
             return False
@@ -249,7 +249,7 @@ def alarm_handler(signum, frame):
         convert_gpx()
         write_fullresults()
         os.killpg(0, signal.SIGKILL)
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
     sys.exit(1)
 
@@ -297,7 +297,7 @@ def binary_path(step, debug=False):
     """Get vehicle binary path."""
     try:
         vehicle = step.split(".")[1]
-    except Exception:
+    except IndexError:
         return None
 
     if vehicle not in __bin_names:
@@ -481,10 +481,10 @@ def run_step(step):
 
     # see if we need any supplementary binaries
     supplementary_binaries = []
-    for k in supplementary_test_binary_map.keys():
-        if step.startswith(k):
+    for key, value in supplementary_test_binary_map.items():
+        if step.startswith(key):
             # this test needs to use supplementary binaries
-            for supplementary_test_binary in supplementary_test_binary_map[k]:
+            for supplementary_test_binary in value:
                 a = supplementary_test_binary.split(':')
                 if len(a) != 4:
                     raise ValueError("Bad supplementary_test_binary %s" % supplementary_test_binary)
@@ -751,7 +751,7 @@ def run_tests(steps):
                     failed_testinstances[step].append(testinstance)
                 results.add(step, '<span class="failed-text">FAILED</span>',
                             time.time() - t1)
-        except Exception as msg:
+        except Exception as msg:  # noqa: BLE001
             passed = False
             failed.append(step)
             print(">>>> FAILED STEP: %s at %s (%s)" %
